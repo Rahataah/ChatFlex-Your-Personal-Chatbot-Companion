@@ -37,7 +37,7 @@ with st.sidebar:
         "Nvidia Nemotron Ultra": "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
         "Deepseek Chat V3": "deepseek/deepseek-chat-v3-0324:free",
         "Bytedance UI Tars 72B": "bytedance-research/ui-tars-72b:free",
-        "Google Gemini 2.5 Pro Exp": "google/gemini-2.5-pro-exp-03-25:free",
+        "Google Gemini 2.0 Flash Exp": "google/gemini-2.0-flash-exp:free",
         "Google Gemma 3 27B IT": "google/gemma-3-27b-it:free",
         "Qwen 2.5 VL 3B Instruct": "qwen/qwen2.5-vl-3b-instruct:free"
     }
