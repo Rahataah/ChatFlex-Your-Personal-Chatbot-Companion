@@ -8,8 +8,8 @@ import tempfile
 import os
 from PIL import Image
 
-# Add this import
-from streamlit_js_eval import streamlit_js_eval
+# Remove this import
+# from streamlit_js_eval import streamlit_js_eval
 
 # Set page config
 st.set_page_config(page_title="OpenRouter Chatbot", page_icon="📖", layout="wide")
@@ -211,17 +211,10 @@ if prompt := st.chat_input("What is up?"):
         user_message_content.append({"type": "text", "text": prompt})
         display_items.append(prompt)
 
-    # Handle pasted image (from clipboard)
-    pasted_image = None
-    if pasted_image_data:
-        header, base64_data = pasted_image_data.split(",", 1)
-        image_bytes = base64.b64decode(base64_data)
-        pasted_image = Image.open(io.BytesIO(image_bytes))
-        user_message_content.append({
-            "type": "image_url",
-            "image_url": {"url": pasted_image_data}
-        })
-        display_items.append(pasted_image)
+    # Remove pasted image handling
+    # pasted_image = None # REMOVED
+    # if pasted_image_data: # REMOVED
+    #     ... # REMOVED
 
     # Handle uploaded image (from file uploader)
     if uploaded_image is not None:
@@ -247,7 +240,25 @@ if prompt := st.chat_input("What is up?"):
                 st.image(item, width=200)
 
     # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": user_message_content})
+    # Adjust logic if only text or only image is possible
+    if prompt and uploaded_image:
+        # Keep multimodal content structure
+        st.session_state.messages.append({"role": "user", "content": user_message_content})
+    elif prompt:
+        # Send only text content
+        st.session_state.messages.append({"role": "user", "content": prompt})
+    elif uploaded_image:
+         # Send only image content (adjust API call if needed)
+         # Find the image part in user_message_content
+         image_content = next((item for item in user_message_content if item["type"] == "image_url"), None)
+         if image_content:
+             st.session_state.messages.append({"role": "user", "content": [image_content]}) # Send as list
+         else:
+             st.error("Error processing uploaded image for history.") # Should not happen
+             st.stop()
+    else: # Should be caught by the warning above, but as a safeguard
+        st.stop()
+
 
     # --- API Call ---
     try:
@@ -256,11 +267,20 @@ if prompt := st.chat_input("What is up?"):
             api_key=openrouter_api_key,
         )
 
-        # Prepare messages for API (already handled correctly in your existing code)
-        api_messages = st.session_state.messages[:] # Send the current history
+        # Prepare messages for API
+        api_messages = []
+        for msg in st.session_state.messages:
+            # Ensure messages sent to API are in the correct format
+            if isinstance(msg["content"], list):
+                 # If content is already a list (multimodal), use it directly
+                 api_messages.append({"role": msg["role"], "content": msg["content"]})
+            elif isinstance(msg["content"], str):
+                 # If content is a string (text only), wrap it in the list structure
+                 api_messages.append({"role": msg["role"], "content": [{"type": "text", "text": msg["content"]}]})
+            # Add handling for other potential formats if necessary
 
         # Use the helper function for the initial call as well
-        assistant_response = get_assistant_response(client, selected_model, api_messages)
+        assistant_response = get_assistant_response(client, selected_model, api_messages) # Pass adjusted messages
 
         if assistant_response:
             # Add assistant response to chat history
