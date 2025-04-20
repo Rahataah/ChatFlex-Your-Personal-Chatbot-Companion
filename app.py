@@ -155,68 +155,12 @@ if prompt := st.chat_input("What is up?"):
     user_message_content = []
     display_items = [] # Separate list for what to display in UI
 
-    # Cross-platform clipboard image handling
-    clipboard_image = None
-    try:
-        system = platform.system()
-        if system == "Windows":
-            # Windows - use PIL's ImageGrab
-            from PIL import ImageGrab
-            clipboard_image = ImageGrab.grabclipboard()
-            # Verify it's an image
-            if clipboard_image is not None and hasattr(clipboard_image, 'mode'):
-                pass  # Image is already in the right format
-        elif system == "Linux":
-            # Linux - try xclip or wl-paste
-            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-            temp_file.close()
-            
-            # Try wl-paste first (Wayland)
-            try:
-                subprocess.run(['wl-paste', '-t', 'image/png', '-o', temp_file.name], check=True)
-                clipboard_image = Image.open(temp_file.name)
-            except (subprocess.SubprocessError, FileNotFoundError):
-                # Try xclip (X11)
-                try:
-                    subprocess.run(['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'], 
-                                  stdout=open(temp_file.name, 'wb'), check=True)
-                    clipboard_image = Image.open(temp_file.name)
-                except (subprocess.SubprocessError, FileNotFoundError):
-                    st.info("For clipboard image support on Linux, install wl-paste (Wayland) or xclip (X11)")
-            
-            # Clean up temp file
-            os.unlink(temp_file.name)
-        elif system == "Darwin":  # macOS
-            from PIL import ImageGrab
-            clipboard_image = ImageGrab.grabclipboard()
-            
-        # Process the clipboard image if found
-        if clipboard_image is not None and hasattr(clipboard_image, 'mode'):
-            # Convert PIL image to bytes
-            img_byte_arr = io.BytesIO()
-            clipboard_image.save(img_byte_arr, format='PNG')
-            img_byte_arr.seek(0)
-            
-            # Encode image to base64
-            base64_image = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
-            image_url = f"data:image/png;base64,{base64_image}"
-            
-            # Add to message content
-            user_message_content.append({
-                "type": "image_url",
-                "image_url": {"url": image_url}
-            })
-            display_items.append(clipboard_image)
-            st.success("Image from clipboard attached!")
-    except Exception as e:
-        st.info(f"Clipboard image not available: {e}")
-
+    # Clipboard feature removed: only use uploaded image
     if prompt:
         user_message_content.append({"type": "text", "text": prompt})
         display_items.append(prompt)
 
-    # Use uploaded image if no clipboard image was found
-    if uploaded_image is not None and clipboard_image is None:
+    if uploaded_image is not None:
         image_bytes = uploaded_image.getvalue()
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
         image_url = f"data:image/{uploaded_image.type.split('/')[-1]};base64,{base64_image}"
@@ -255,11 +199,6 @@ if prompt := st.chat_input("What is up?"):
         assistant_response = get_assistant_response(client, selected_model, api_messages)
 
         if assistant_response:
-            # Display assistant response in chat message container
-            # Note: We display temporarily here, but the full history display below will handle the button
-            # with st.chat_message("assistant"): # Temporarily display before rerun
-            #     st.markdown(assistant_response) # This might cause a flicker, consider removing if problematic
-
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": assistant_response})
 
@@ -267,17 +206,8 @@ if prompt := st.chat_input("What is up?"):
             st.rerun() # ADDED HERE
 
             # Clear the uploaded image state after processing IF it was used in this turn
-            # This prevents the same image from being automatically resent with the next text prompt
-            # We need a way to know if the image was just uploaded or carried over.
-            # A simple approach: clear it if it exists after a successful message send.
-            # More robust: use session state to track if the image was processed for the *current* prompt.
-            # For now, let's clear it simply. Consider refining this if needed.
             if uploaded_image is not None:
-                 # This might clear prematurely if the user wants to ask follow-up questions about the same image.
-                 # A button like "Clear Image" might be better. Let's comment this out for now.
-                 # st.session_state.sidebar_file_uploader = None # Requires using the key
-                 pass # Decide on image clearing strategy later
+                pass # Decide on image clearing strategy later
 
     except Exception as e:
-        # Error handled within get_assistant_response now, but keep general catch just in case
         st.error(f"An unexpected error occurred: {e}")
