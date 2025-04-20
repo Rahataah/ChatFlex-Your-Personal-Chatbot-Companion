@@ -101,7 +101,7 @@ document.addEventListener('paste', async function(event) {
 js_result = streamlit_js_eval(js_expressions=js_code, key="paste_image_js", want_return_value=False, debounce_time=0)
 
 # Listen for the custom message from JS
-pasted_image_data = st.experimental_get_query_params().get("pasted_image", [None])[0]
+pasted_image_data = st.query_params.get("pasted_image", [None])[0]
 if pasted_image_data:
     # Remove the query param after reading
     st.experimental_set_query_params(pasted_image=None)
