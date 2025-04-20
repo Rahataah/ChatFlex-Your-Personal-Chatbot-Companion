@@ -2,6 +2,7 @@ import streamlit as st
 import openai
 import base64 # Add base64 for image encoding
 import io     # Add io for handling byte streams
+from PIL import ImageGrab  # Add for clipboard image capture
 
 # Set page config
 st.set_page_config(page_title="OpenRouter Chatbot", page_icon="📖", layout="wide")
@@ -37,7 +38,7 @@ with st.sidebar:
         "Nvidia Nemotron Ultra": "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
         "Deepseek Chat V3": "deepseek/deepseek-chat-v3-0324:free",
         "Bytedance UI Tars 72B": "bytedance-research/ui-tars-72b:free",
-        "Google Gemini 2.0 Flash Exp": "google/gemini-2.0-flash-exp:free",
+        "Google Gemini 2.5 Pro Exp": "google/gemini-2.5-pro-exp-03-25:free",
         "Google Gemma 3 27B IT": "google/gemma-3-27b-it:free",
         "Qwen 2.5 VL 3B Instruct": "qwen/qwen2.5-vl-3b-instruct:free"
     }
@@ -150,11 +151,36 @@ if prompt := st.chat_input("What is up?"):
     user_message_content = []
     display_items = [] # Separate list for what to display in UI
 
+    # Check for clipboard image
+    clipboard_image = None
+    try:
+        clipboard_image = ImageGrab.grabclipboard()
+        if clipboard_image is not None and hasattr(clipboard_image, 'mode'):  # Verify it's an image
+            # Convert PIL image to bytes
+            img_byte_arr = io.BytesIO()
+            clipboard_image.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+            
+            # Encode image to base64
+            base64_image = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+            image_url = f"data:image/png;base64,{base64_image}"
+            
+            # Add to message content
+            user_message_content.append({
+                "type": "image_url",
+                "image_url": {"url": image_url}
+            })
+            display_items.append(clipboard_image)
+            st.success("Image from clipboard attached!")
+    except Exception as e:
+        st.warning(f"Could not process clipboard image: {e}")
+
     if prompt:
         user_message_content.append({"type": "text", "text": prompt})
         display_items.append(prompt)
 
-    if uploaded_image is not None:
+    # Use uploaded image if no clipboard image was found
+    if uploaded_image is not None and clipboard_image is None:
         image_bytes = uploaded_image.getvalue()
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
         image_url = f"data:image/{uploaded_image.type.split('/')[-1]};base64,{base64_image}"
