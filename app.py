@@ -8,6 +8,9 @@ import tempfile
 import os
 from PIL import Image
 
+# Add this import
+from streamlit_js_eval import streamlit_js_eval
+
 # Set page config
 st.set_page_config(page_title="OpenRouter Chatbot", page_icon="📖", layout="wide")
 
@@ -72,6 +75,36 @@ with st.sidebar:
     # st.divider()
     # rerun_button = st.button("🔄 Rerun Last Response") # REMOVED
 
+
+# --- Clipboard Paste Handler ---
+# This will inject JS to listen for paste events and send image data to Streamlit
+js_code = """
+document.addEventListener('paste', async function(event) {
+    const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            const blob = items[i].getAsFile();
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                window.parent.postMessage({
+                    type: 'STREAMLIT:PASTE_IMAGE',
+                    data: event.target.result
+                }, '*');
+            };
+            reader.readAsDataURL(blob);
+        }
+    }
+});
+"""
+
+# Run the JS code and get the result if an image is pasted
+js_result = streamlit_js_eval(js_expressions=js_code, key="paste_image_js", want_return_value=False, debounce_time=0)
+
+# Listen for the custom message from JS
+pasted_image_data = st.experimental_get_query_params().get("pasted_image", [None])[0]
+if pasted_image_data:
+    # Remove the query param after reading
+    st.experimental_set_query_params(pasted_image=None)
 
 # --- Chat History Initialization ---
 if "messages" not in st.session_state:
@@ -153,13 +186,25 @@ if prompt := st.chat_input("What is up?"):
 
     # --- Process Input (Text and Image) ---
     user_message_content = []
-    display_items = [] # Separate list for what to display in UI
+    display_items = []
 
-    # Clipboard feature removed: only use uploaded image
     if prompt:
         user_message_content.append({"type": "text", "text": prompt})
         display_items.append(prompt)
 
+    # Handle pasted image (from clipboard)
+    pasted_image = None
+    if pasted_image_data:
+        header, base64_data = pasted_image_data.split(",", 1)
+        image_bytes = base64.b64decode(base64_data)
+        pasted_image = Image.open(io.BytesIO(image_bytes))
+        user_message_content.append({
+            "type": "image_url",
+            "image_url": {"url": pasted_image_data}
+        })
+        display_items.append(pasted_image)
+
+    # Handle uploaded image (from file uploader)
     if uploaded_image is not None:
         image_bytes = uploaded_image.getvalue()
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
