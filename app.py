@@ -25,9 +25,21 @@ def get_assistant_response(client, model, messages_for_api):
             model=model,
             messages=messages_for_api
         )
-        return response.choices[0].message.content
+        # Add checks for the response structure
+        if response and response.choices:
+            first_choice = response.choices[0]
+            if first_choice and first_choice.message:
+                return first_choice.message.content
+            else:
+                st.error("API response structure is invalid (missing message).")
+                return None
+        else:
+            st.error("API response structure is invalid (missing choices).")
+            return None
     except Exception as e:
-        st.error(f"An error occurred during API call: {e}")
+        # Log the actual error for debugging, but show a generic message to the user
+        print(f"Detailed API Error: {e}") # Optional: Log detailed error to console/log file
+        st.error(f"An error occurred during API call. Please check your API key and model selection.")
         return None
 
 # --- Sidebar Configuration ---
