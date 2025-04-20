@@ -105,6 +105,50 @@ if "messages" not in st.session_state:
 # --- Rerun Logic ---
 # Trigger the rerun logic if the specific button was pressed
 if rerun_triggered: # Check the flag set earlier
+    # --- Start of restored Rerun Logic block ---
+    if not openrouter_api_key:
+        st.info("Please add your OpenRouter API key to continue.")
+        st.stop()
+    # Check if there are enough messages to rerun (should be guaranteed by where the button is placed)
+    if len(st.session_state.messages) >= 2 and st.session_state.messages[-1]["role"] == "assistant":
+        # Remove the last assistant message
+        st.session_state.messages.pop()
+        # Get the messages to send (all messages up to the last user message)
+        # Ensure messages are formatted correctly for the API
+        messages_for_rerun = []
+        for msg in st.session_state.messages: # Use the history *before* the popped message
+            role = msg["role"]
+            content = msg["content"]
+            if isinstance(content, str): # Text-only message from history
+                messages_for_rerun.append({"role": role, "content": [{"type": "text", "text": content}]})
+            elif isinstance(content, list): # Already multimodal or image-only list
+                messages_for_rerun.append({"role": role, "content": content})
+            # Add more checks if other content types are possible
+
+        try:
+            client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=openrouter_api_key,
+            )
+            # Call the API using the helper function
+            assistant_response = get_assistant_response(client, selected_model, messages_for_rerun)
+
+            if assistant_response:
+                # Add new assistant response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+
+            # Rerun the script to update the display
+            # Important: Reset the button state after processing to prevent infinite loop
+            # Need the index of the message *before* it was popped
+            original_last_message_index = len(st.session_state.messages) # Index where the new message will be added
+            st.session_state[f"rerun_{original_last_message_index -1}"] = False # Reset button state for the previous index
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"An error occurred during rerun: {e}")
+            # Optionally add the popped message back if rerun fails? Or just leave it removed.
+            # For simplicity, we leave it removed for now.
+    # --- End of restored Rerun Logic block ---
     # No need for the 'else' warning here, as the button shouldn't appear if conditions aren't met
 
 # --- User Input Handling ---
