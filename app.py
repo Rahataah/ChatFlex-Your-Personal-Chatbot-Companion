@@ -2,7 +2,11 @@ import streamlit as st
 import openai
 import base64 # Add base64 for image encoding
 import io     # Add io for handling byte streams
-from PIL import ImageGrab  # Add for clipboard image capture
+import platform
+import subprocess
+import tempfile
+import os
+from PIL import Image
 
 # Set page config
 st.set_page_config(page_title="OpenRouter Chatbot", page_icon="📖", layout="wide")
@@ -38,7 +42,7 @@ with st.sidebar:
         "Nvidia Nemotron Ultra": "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
         "Deepseek Chat V3": "deepseek/deepseek-chat-v3-0324:free",
         "Bytedance UI Tars 72B": "bytedance-research/ui-tars-72b:free",
-        "Google Gemini 2.5 Pro Exp": "google/gemini-2.5-pro-exp-03-25:free",
+        "Google Gemini 2.0 Flash Exp": "google/gemini-2.0-flash-exp:free",
         "Google Gemma 3 27B IT": "google/gemma-3-27b-it:free",
         "Qwen 2.5 VL 3B Instruct": "qwen/qwen2.5-vl-3b-instruct:free"
     }
@@ -151,11 +155,43 @@ if prompt := st.chat_input("What is up?"):
     user_message_content = []
     display_items = [] # Separate list for what to display in UI
 
-    # Check for clipboard image
+    # Cross-platform clipboard image handling
     clipboard_image = None
     try:
-        clipboard_image = ImageGrab.grabclipboard()
-        if clipboard_image is not None and hasattr(clipboard_image, 'mode'):  # Verify it's an image
+        system = platform.system()
+        if system == "Windows":
+            # Windows - use PIL's ImageGrab
+            from PIL import ImageGrab
+            clipboard_image = ImageGrab.grabclipboard()
+            # Verify it's an image
+            if clipboard_image is not None and hasattr(clipboard_image, 'mode'):
+                pass  # Image is already in the right format
+        elif system == "Linux":
+            # Linux - try xclip or wl-paste
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            temp_file.close()
+            
+            # Try wl-paste first (Wayland)
+            try:
+                subprocess.run(['wl-paste', '-t', 'image/png', '-o', temp_file.name], check=True)
+                clipboard_image = Image.open(temp_file.name)
+            except (subprocess.SubprocessError, FileNotFoundError):
+                # Try xclip (X11)
+                try:
+                    subprocess.run(['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'], 
+                                  stdout=open(temp_file.name, 'wb'), check=True)
+                    clipboard_image = Image.open(temp_file.name)
+                except (subprocess.SubprocessError, FileNotFoundError):
+                    st.info("For clipboard image support on Linux, install wl-paste (Wayland) or xclip (X11)")
+            
+            # Clean up temp file
+            os.unlink(temp_file.name)
+        elif system == "Darwin":  # macOS
+            from PIL import ImageGrab
+            clipboard_image = ImageGrab.grabclipboard()
+            
+        # Process the clipboard image if found
+        if clipboard_image is not None and hasattr(clipboard_image, 'mode'):
             # Convert PIL image to bytes
             img_byte_arr = io.BytesIO()
             clipboard_image.save(img_byte_arr, format='PNG')
@@ -173,7 +209,7 @@ if prompt := st.chat_input("What is up?"):
             display_items.append(clipboard_image)
             st.success("Image from clipboard attached!")
     except Exception as e:
-        st.warning(f"Could not process clipboard image: {e}")
+        st.info(f"Clipboard image not available: {e}")
 
     if prompt:
         user_message_content.append({"type": "text", "text": prompt})
