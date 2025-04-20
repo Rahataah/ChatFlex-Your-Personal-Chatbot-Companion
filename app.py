@@ -101,3 +101,115 @@ if "messages" not in st.session_state:
 # --- Rerun Logic Trigger Check ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# --- Rerun Logic ---
+# Trigger the rerun logic if the specific button was pressed
+if rerun_triggered: # Check the flag set earlier
+    # No need for the 'else' warning here, as the button shouldn't appear if conditions aren't met
+
+# --- User Input Handling ---
+if prompt := st.chat_input("What is up?"):
+    if not openrouter_api_key:
+        st.info("Please add your OpenRouter API key to continue.")
+        st.stop()
+
+    # --- Process Input (Text and Image) ---
+    user_message_content = []
+    display_items = []
+
+    if prompt:
+        user_message_content.append({"type": "text", "text": prompt})
+        display_items.append(prompt)
+
+    # Handle uploaded image (from file uploader)
+    if uploaded_image is not None:
+        image_bytes = uploaded_image.getvalue()
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        # Determine image type for the data URL
+        img_type = uploaded_image.type.split('/')[-1]
+        if img_type == "jpeg": # Common variation
+            img_type = "jpg"
+        image_url = f"data:image/{img_type};base64,{base64_image}"
+        user_message_content.append({
+            "type": "image_url",
+            "image_url": {"url": image_url}
+        })
+        display_items.append(uploaded_image) # Keep UploadedFile object for st.image
+
+    # Check if any input was provided
+    if not prompt and uploaded_image is None:
+        st.warning("Please enter a prompt or upload an image.")
+        st.stop()
+
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        for item in display_items:
+            if isinstance(item, str):
+                st.markdown(item)
+            elif hasattr(item, 'getvalue'): # Check if it's an uploaded file object
+                st.image(item, width=200)
+            # Add else clause if other types are possible
+
+    # Add user message to chat history
+    # Structure depends on whether text, image, or both are present
+    if prompt and uploaded_image:
+        # Multimodal message
+        st.session_state.messages.append({"role": "user", "content": user_message_content})
+    elif prompt:
+        # Text-only message
+        st.session_state.messages.append({"role": "user", "content": prompt})
+    elif uploaded_image:
+        # Image-only message - Ensure content is a list as per OpenAI spec
+        image_content_for_history = next((item for item in user_message_content if item["type"] == "image_url"), None)
+        if image_content_for_history:
+             st.session_state.messages.append({"role": "user", "content": [image_content_for_history]})
+        else:
+             st.error("Internal error: Could not format image message for history.")
+             st.stop()
+
+
+    # --- API Call ---
+    try:
+        client = openai.OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_api_key,
+        )
+
+        # Prepare messages for API call, ensuring correct format
+        api_messages = []
+        for msg in st.session_state.messages:
+            role = msg["role"]
+            content = msg["content"]
+            if isinstance(content, str): # Text-only message from history
+                api_messages.append({"role": role, "content": [{"type": "text", "text": content}]})
+            elif isinstance(content, list): # Already multimodal or image-only list
+                api_messages.append({"role": role, "content": content})
+            # Add more checks if other content types are possible
+
+        # Use the helper function for the API call
+        assistant_response = get_assistant_response(client, selected_model, api_messages)
+
+        if assistant_response:
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+
+            # --- Rerun to update display ---
+            # Clear the uploaded image state ONLY if it was part of THIS message turn
+            # This prevents clearing if user uploads image but doesn't send yet
+            if uploaded_image is not None:
+                 # A simple way is to trigger a rerun which naturally resets the uploader state
+                 # if the key isn't carefully managed across runs.
+                 # Or, explicitly clear it if needed, but rerun is often sufficient.
+                 pass # Let Streamlit's rerun handle the uploader state for now
+
+            st.rerun() # Rerun to show the new messages
+
+    except Exception as e:
+        st.error(f"An unexpected error occurred during API call: {e}")
+
+# --- Final check: Display history if no input/rerun happened ---
+# (This part might already be implicitly handled by Streamlit's flow,
+# but ensures history is shown on initial load or if other logic paths exit early)
+# This should technically be placed *before* the user input handling if you want
+# history displayed before the input box, which is standard.
+# Let's assume the existing Display Chat History loop handles this correctly.
