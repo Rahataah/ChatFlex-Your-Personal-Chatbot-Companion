@@ -194,10 +194,16 @@ if prompt := st.chat_input("What is up?"):
 
         if assistant_response:
             # Display assistant response in chat message container
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
+            # Note: We display temporarily here, but the full history display below will handle the button
+            # with st.chat_message("assistant"): # Temporarily display before rerun
+            #     st.markdown(assistant_response) # This might cause a flicker, consider removing if problematic
+
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+
+            # --- Force a rerun to update the display and show the button ---
+            st.rerun() # ADDED HERE
+
             # Clear the uploaded image state after processing IF it was used in this turn
             # This prevents the same image from being automatically resent with the next text prompt
             # We need a way to know if the image was just uploaded or carried over.
