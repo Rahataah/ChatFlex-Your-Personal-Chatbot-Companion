@@ -98,9 +98,47 @@ with st.sidebar:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- Rerun Logic Trigger Check ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# --- Display Chat History ---  <- This section needs to be present first
+# Use enumerate to get the index of each message
+for idx, message in enumerate(st.session_state.messages):
+    with st.chat_message(message["role"]):
+        # Handle potential multimodal content display
+        if isinstance(message["content"], list):
+            for item in message["content"]:
+                if item["type"] == "text":
+                    st.markdown(item["text"])
+                elif item["type"] == "image_url":
+                    # Display the image itself if it came from the assistant,
+                    # or a placeholder if it was sent by the user in a previous turn.
+                    # For simplicity here, just showing placeholder for user images in history.
+                    # Assistant images would need specific handling if they send images back.
+                    if message["role"] == "user":
+                         st.markdown("*(Image sent by user)*")
+                    # If assistant could send images, you'd handle displaying item["image_url"]["url"] here
+        elif isinstance(message["content"], str): # Handle text-only messages
+            st.markdown(message["content"])
+
+        # --- Add Rerun Button next to the LAST assistant message ---
+        # Calculate last_message_index *inside* the loop or pass it correctly
+        current_last_message_index = len(st.session_state.messages) - 1
+        if message["role"] == "assistant" and idx == current_last_message_index:
+            # Add the button with a unique key based on its index
+            st.button("🔄", key=f"rerun_{idx}", help="Rerun this response")
+
+
+# --- Rerun Logic Trigger Check --- <- This section defines rerun_triggered
+# We need to know the index of the last message to check its button state
+last_message_index = len(st.session_state.messages) - 1
+rerun_triggered = False # Initialize the flag
+# Check conditions for showing the button and if the button exists in session state
+if last_message_index >= 0 and st.session_state.messages[last_message_index]["role"] == "assistant":
+    # Check if the button corresponding to the last assistant message was clicked
+    button_key = f"rerun_{last_message_index}"
+    if st.session_state.get(button_key): # Check if the button's state is True (clicked)
+        rerun_triggered = True
+        # Reset button state immediately after checking to prevent re-triggering on next rerun
+        # st.session_state[button_key] = False # Moved reset to *after* successful rerun logic
+
 
 # --- Rerun Logic ---
 # Trigger the rerun logic if the specific button was pressed
