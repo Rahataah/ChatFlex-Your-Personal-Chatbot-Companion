@@ -101,9 +101,16 @@ document.addEventListener('paste', async function(event) {
 js_result = streamlit_js_eval(js_expressions=js_code, key="paste_image_js", want_return_value=False, debounce_time=0)
 
 # Listen for the custom message from JS
-pasted_image_data = st.query_params.get("pasted_image", [None])[0]
+pasted_image_data = None
+query_params = st.query_params if hasattr(st, "query_params") else {}
+if isinstance(query_params, dict):
+    pasted_image_list = query_params.get("pasted_image")
+    if isinstance(pasted_image_list, list) and pasted_image_list:
+        pasted_image_data = pasted_image_list[0]
+    elif isinstance(pasted_image_list, str):
+        pasted_image_data = pasted_image_list
+
 if pasted_image_data:
-    # Remove the query param after reading
     st.experimental_set_query_params(pasted_image=None)
 
 # --- Chat History Initialization ---
